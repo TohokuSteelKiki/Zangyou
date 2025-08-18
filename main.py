@@ -1,3 +1,4 @@
+from tkinter import messagebox
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -12,11 +13,11 @@ from tkinter import simpledialog
 import os  # 追加
 
 
-
 # ====== ユーザー入力（パスワード・理由） ======
 root = tk.Tk()
 root.withdraw()
 
+# --- パスワード入力（常に必要） ---
 PASSWORD = simpledialog.askstring(
     "パスワード入力", "ログイン用パスワードを入力してください：", show="*"
 )
@@ -24,6 +25,13 @@ if not PASSWORD:
     print("[ERROR] パスワードが入力されませんでした。")
     sys.exit(1)
 
+# --- 残業申請を実行するか確認 ---
+proceed = messagebox.askyesno("確認", "残業申請を実行しますか？")
+if not proceed:
+    print("[INFO] ユーザーが申請をキャンセルしました。")
+    sys.exit(0)
+
+# --- 残業理由の入力（申請する場合のみ） ---
 ZANGYO_REASON = simpledialog.askstring(
     "残業理由入力", "残業申請の理由を入力してください："
 )
@@ -31,19 +39,22 @@ if not ZANGYO_REASON:
     print("[ERROR] 残業理由が入力されませんでした。")
     sys.exit(1)
 
+
 # ====== 定時設定 ======
 定時 = datetime.datetime.strptime("17:00", "%H:%M")
 # ====== 設定 ======
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # スクリプトの絶対パスを取得
-EXCEL_PATH = os.path.join(SCRIPT_DIR, "IDPASS.xlsx")     # 同じフォルダ内のExcelファイルを指定
+EXCEL_PATH = os.path.join(
+    SCRIPT_DIR, "IDPASS.xlsx"
+)  # 同じフォルダ内のExcelファイルを指定
 TARGET_SCRIPT = "TimeProGX"
 LOGIN_URL = "http://128.198.11.125/xgweb/login.asp"
 
 # ====== ログインID取得（Excelから） ======
 try:
-    df = pd.read_excel(EXCEL_PATH)
+    df = pd.read_excel(EXCEL_PATH, dtype={'ID': str})  # ← dtype指定で文字列として読む
     row = df[df["スクリプト"] == TARGET_SCRIPT].iloc[0]
-    LOGIN_ID = str(row["ID"])
+    LOGIN_ID = row["ID"].strip()  # strip()で空白除去も安全に
 except Exception as e:
     print(f"[ERROR] Excel読み込み失敗: {e}")
     sys.exit(1)
@@ -78,7 +89,7 @@ try:
         driver.switch_to.frame(i)
         try:
             retire_button = WebDriverWait(driver, 3).until(
-                EC.element_to_be_clickable((By.LINK_TEXT, "退　勤"))
+                EC.element_to_be_clickable((By.LINK_TEXT, "出　勤"))
             )
             retire_button.click()
             print(f"[SUCCESS] 退勤ボタンを Frame {i} 内でクリックしました。")
