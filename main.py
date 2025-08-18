@@ -29,15 +29,15 @@ if not PASSWORD:
 proceed = messagebox.askyesno("確認", "残業申請を実行しますか？")
 if not proceed:
     print("[INFO] ユーザーが申請をキャンセルしました。")
-    sys.exit(0)
-
-# --- 残業理由の入力（申請する場合のみ） ---
-ZANGYO_REASON = simpledialog.askstring(
-    "残業理由入力", "残業申請の理由を入力してください："
-)
-if not ZANGYO_REASON:
-    print("[ERROR] 残業理由が入力されませんでした。")
-    sys.exit(1)
+# sys.exit(0)
+if proceed:
+    # --- 残業理由の入力（申請する場合のみ） ---
+    ZANGYO_REASON = simpledialog.askstring(
+        "残業理由入力", "残業申請の理由を入力してください："
+    )
+    if not ZANGYO_REASON:
+        print("[ERROR] 残業理由が入力されませんでした。")
+        sys.exit(1)
 
 
 # ====== 定時設定 ======
@@ -52,7 +52,7 @@ LOGIN_URL = "http://128.198.11.125/xgweb/login.asp"
 
 # ====== ログインID取得（Excelから） ======
 try:
-    df = pd.read_excel(EXCEL_PATH, dtype={'ID': str})  # ← dtype指定で文字列として読む
+    df = pd.read_excel(EXCEL_PATH, dtype={"ID": str})  # ← dtype指定で文字列として読む
     row = df[df["スクリプト"] == TARGET_SCRIPT].iloc[0]
     LOGIN_ID = row["ID"].strip()  # strip()で空白除去も安全に
 except Exception as e:
@@ -141,13 +141,17 @@ try:
     driver.switch_to.window(main_window)
     driver.switch_to.default_content()
 
+    if not proceed:
+        print("[INFO] 残業申請しないので終了します。")
+        sys.exit(0)
+
     # ====== 残業時間判定 ======
     punch_dt = datetime.datetime.strptime(punch_time, "%H:%M")
     delta_min = (punch_dt - 定時).total_seconds() / 60
-    if delta_min < 10:
-        print("[INFO] 残業時間が10分未満のため申請をスキップします。")
-        driver.quit()
-        sys.exit(0)
+    # if delta_min < 10:
+    #     print("[INFO] 残業時間が10分未満のため申請をスキップします。")
+    #     driver.quit()
+    #     sys.exit(0)
 
     start_time = 定時.strftime("%H:%M")
     end_time = punch_time
@@ -199,5 +203,5 @@ except Exception as e:
     print(f"[ERROR] 処理中にエラーが発生しました: {e}")
 
 finally:
-    driver.quit()
+   #driver.quit()
     print("[INFO] ブラウザを閉じて終了しました。")
