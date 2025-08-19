@@ -90,7 +90,7 @@ try:
         driver.switch_to.frame(i)
         try:
             retire_button = WebDriverWait(driver, 3).until(
-                EC.element_to_be_clickable((By.LINK_TEXT, "出　勤"))   # TODO ログイン後の打刻は出勤OR退勤に変更でクリックされるボタンを変更
+                EC.element_to_be_clickable((By.LINK_TEXT, "退　勤"))
             )
             retire_button.click()
             print(f"[SUCCESS] 退勤ボタンを Frame {i} 内でクリックしました。")
@@ -204,7 +204,7 @@ try:
     apply_button = driver.find_element(
         By.XPATH, "//input[@name='ActBtn' and @value='登録']"
     )
-    #apply_button.click() #TODO 登録ボタンの有効にする際はコメント化解除 
+    apply_button.click()
 
     # --- 登録ポップアップに自動応答 ---
     try:
