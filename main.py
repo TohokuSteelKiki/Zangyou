@@ -4,6 +4,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import NoAlertPresentException, TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 import datetime
 import time
@@ -89,7 +90,9 @@ try:
         driver.switch_to.frame(i)
         try:
             retire_button = WebDriverWait(driver, 3).until(
-                EC.element_to_be_clickable((By.LINK_TEXT, "出　勤"))
+                EC.element_to_be_clickable(
+                    (By.LINK_TEXT, "出　勤")
+                )  # TODO ログイン後の打刻は出勤OR退勤に変更でクリックされるボタンを変更
             )
             retire_button.click()
             print(f"[SUCCESS] 退勤ボタンを Frame {i} 内でクリックしました。")
@@ -199,9 +202,62 @@ try:
 
     print("[SUCCESS] 残業申請フォーム入力完了")
 
+    # --- 登録ボタンを押す ---
+    apply_button = driver.find_element(
+        By.XPATH, "//input[@name='ActBtn' and @value='登録']"
+    )
+    # apply_button.click() #TODO 登録ボタンの有効にする際はコメント化解除
+
+    # --- 登録ポップアップに自動応答 ---
+    try:
+        WebDriverWait(driver, 10).until(EC.alert_is_present())
+        alert = driver.switch_to.alert
+        print(f"✅ 登録ポップアップ: {alert.text}")
+        alert.accept()
+        print("→ OKボタンをクリックしました。")
+    except TimeoutException:
+        print("⚠️ アラートが表示されませんでした。")
+
+    # 申請内容確認
+    try:
+        # frameTopで「届出処理」を再クリック（アクティブ化）
+        driver.switch_to.default_content()
+        WebDriverWait(driver, 10).until(
+            EC.frame_to_be_available_and_switch_to_it("frameTop")
+        )
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.LINK_TEXT, "届出処理"))
+        ).click()
+
+        # frameBtmで「届出データ表示」をクリック
+        driver.switch_to.default_content()
+        WebDriverWait(driver, 10).until(
+            EC.frame_to_be_available_and_switch_to_it("frameBtm")
+        )
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//span[.//img[contains(@alt, '届出データ表示')]]")
+            )
+        ).click()
+
+        time.sleep(2)  # 表示待ち（必要なら明示）
+
+        # 表示ページのframeBtmに再度切り替えて最下部へスクロール
+        driver.switch_to.default_content()
+        WebDriverWait(driver, 10).until(
+            EC.frame_to_be_available_and_switch_to_it("frameBtm")
+        )
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+        print("[INFO] 届出データ表示ページを表示し、スクロール完了。")
+
+    except Exception as e:
+        print(f"[WARNING] 届出データ表示の確認中にエラーが発生しました: {e}")
+
 except Exception as e:
     print(f"[ERROR] 処理中にエラーが発生しました: {e}")
 
 finally:
-   #driver.quit()
-    print("[INFO] ブラウザを閉じて終了しました。")
+    # driver.quit()
+    # print("[INFO] ブラウザを閉じて終了しました。")
+    print("[INFO] 終了")
