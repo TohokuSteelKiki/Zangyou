@@ -228,7 +228,7 @@ class TimeProGXAutomation:
         # まずはUI要素直接クリックを試す
         clicked = self._find_click_text(
             top,
-            titles=("出　勤", "出勤"),
+            titles=("退　勤", "退勤"),
             control_types=("Hyperlink", "Text"),
             # top, titles=("退　勤", "退勤"), control_types=("Hyperlink", "Text")
         )
@@ -298,9 +298,9 @@ class TimeProGXAutomation:
         # 残業時間判定
         punch_dt = datetime.datetime.strptime(punch_time, "%H:%M")
         delta_min = (punch_dt - self.teiji).total_seconds() / 60.0
-        # if delta_min < 10:
-        #     print("[INFO] 残業<1分。申請スキップ")
-        #     return
+        if delta_min < 10:
+            print("[INFO] 残業<1分。申請スキップ")
+            return
 
         start_time = self.teiji.strftime("%H:%M")
         end_time = punch_time
@@ -406,7 +406,10 @@ class TimeProGXAutomation:
 
         print("[INFO] 残業申請フォーム入力完了")
 
-        # 登録 or 照会→登録
+        
+        # 登録 or 照会→登録 TODO:登録の実装
+        # self._find_click_text(form, ("照会",), ("Button", "Hyperlink", "Text"))
+        # self._find_click_text(form, ("登録",), ("Button", "Hyperlink", "Text"))
         # if not self._find_click_text(form, ("登録",), ("Button", "Hyperlink", "Text")):
         #     self._find_click_text(form, ("照会",), ("Button", "Hyperlink", "Text"))
         #     time.sleep(1.0)

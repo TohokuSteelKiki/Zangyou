@@ -46,15 +46,21 @@ python -m venv .venv
     .venv\Include\activate   
     ```
 
-### 1. Pythonパッケージのインストール
+### A.1. Pythonパッケージのインストール selenium版
+
+```ps
+python.exe -m pip install --upgrade pip
+pip install selenium webdriver-manager pandas tkinter
+```
+
+### B.1. Pythonパッケージのインストール pywinauto版
 
 ```ps
 python.exe -m pip install --upgrade pip
 pip install pywinauto pandas openpyxl pyperclip tkinter
-~~pip install --upgrade selenium webdriver-manager pandas  tkinter~~
 ```
 
-## 2. IDPASS.xlsxの構成
+### 2. IDPASS.xlsxの構成
 
 スクリプトID
 TimeProGX your_id
@@ -72,7 +78,6 @@ TimeProGX your_id
 | | pandas | `pip install pandas` |
 | | openpyxl | `pip install openpyxl`（Excelファイル読込に必要） |
 | Webブラウザ | Google Chrome   | 最新版推奨。自動化対象として使用 |
-| ~~ドライバー~~ | ~~ChromeDriver~~ | ~~[公式サイト](https://chromedriver.chromium.org/downloads) でChromeのバージョンに対応したものを入手~~ |
 | GUIモジュール | tkinter（標準） | Pythonに標準同梱（ない場合は `sudo apt install python3-tk` などで追加） |
 | Excelファイル | IDPASS.xlsx | スクリプトと同じディレクトリに配置（ID情報を記載） |
 
