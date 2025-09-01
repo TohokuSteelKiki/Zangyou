@@ -50,19 +50,11 @@ python -m venv .venv
 
 ```ps
 python.exe -m pip install --upgrade pip
-pip install pywinauto pandas openpyxl pyperclip
+pip install pywinauto pandas openpyxl pyperclip tkinter
+~~pip install --upgrade selenium webdriver-manager pandas  tkinter~~
 ```
 
-### 2. ChromeDriver のセットアップ
-
-pywinautoを使用するためchromedriverを利用する必要がなくなりました。
-~~Chromeのバージョンと一致するchromedriver.exeをダウンロード~~
-
-~~<https://chromedriver.chromium.org/downloads>~~
-
-~~スクリプトと同じディレクトリ、もしくは PATH に追加~~
-
-## 3. IDPASS.xlsxの構成
+## 2. IDPASS.xlsxの構成
 
 スクリプトID
 TimeProGX your_id

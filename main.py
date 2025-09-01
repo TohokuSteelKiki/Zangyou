@@ -2,10 +2,12 @@ from tkinter import messagebox
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import NoAlertPresentException, TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 import datetime
 import time
 import sys
@@ -62,12 +64,13 @@ except Exception as e:
 
 # ====== Chrome起動オプション ======
 options = Options()
-# options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-driver = webdriver.Chrome(options=options)
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
 driver.implicitly_wait(3)
+
 
 try:
     print("[INFO] ログインページにアクセス中...")
