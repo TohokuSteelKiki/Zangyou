@@ -50,7 +50,7 @@ python -m venv .venv
 
 ```ps
 python.exe -m pip install --upgrade pip
-pip install selenium webdriver-manager pandas tkinter
+pip install selenium webdriver-manager pandas openpyxl tkinter
 ```
 
 ### B.1. Pythonパッケージのインストール pywinauto版
@@ -77,6 +77,11 @@ TimeProGX your_id
 | Pythonパッケージ | selenium | `pip install selenium` |
 | | pandas | `pip install pandas` |
 | | openpyxl | `pip install openpyxl`（Excelファイル読込に必要） |
+| | tkinter | `pip install tkinter`PythonでのGUI表現として使用 |
+| | selenium | `pip install selenium`Pythonでのブラウザ自動化として使用 |
+| | webdriver-manager | `pip install webdriver-manager`Pythonでのブラウザ自動化として使用 |
+| | pywinauto | `pip install pywinauto`Pythonでのブラウザ自動化として使用 |
+| | pyperclip | `pip install pyperclip`Pythonでクリップボードとして使用 |
 | Webブラウザ | Google Chrome   | 最新版推奨。自動化対象として使用 |
 | GUIモジュール | tkinter（標準） | Pythonに標準同梱（ない場合は `sudo apt install python3-tk` などで追加） |
 | Excelファイル | IDPASS.xlsx | スクリプトと同じディレクトリに配置（ID情報を記載） |
@@ -94,3 +99,8 @@ python main.py
 定時（17:00）からの退勤までの時間（最小1分単位）
 残業時間乖離が何分からなのか不明のため現状維持でする→17：10以降は必ず入力する
 17:00～17:10の間に関しては申請の有無を申請者に委ねる。
+
+## その他
+
+png2icon.py：png画像をアイコンにする簡易プログラム
+icon.png､icon,ico：EXE化後のアイコンとしていかが？
