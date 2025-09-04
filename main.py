@@ -14,6 +14,10 @@ from tkinter import simpledialog
 import os  # 追加
 
 
+# ====== 残業アラート用定数 （時間・アラート開始日） ======
+ZANGYOU_LIMIT_HOUR = 1 #40H
+ZANGYOU_ALERT_DAY = 2 #20日
+
 # ====== ユーザー入力（パスワード・理由） ======
 root = tk.Tk()
 root.withdraw()
@@ -206,7 +210,7 @@ try:
     apply_button = driver.find_element(
         By.XPATH, "//input[@name='ActBtn' and @value='登録']"
     )
-    # apply_button.click() #TODO 登録ボタンの有効にする際はコメント化解除
+    #apply_button.click()  # TODO 登録ボタンの有効にする際はコメント化解除
 
     # --- 登録ポップアップに自動応答 ---
     try:
@@ -218,42 +222,42 @@ try:
     except TimeoutException:
         print("⚠️ アラートが表示されませんでした。")
 
-    # 申請内容確認
-    try:
-        # frameTopで「届出処理」を再クリック（アクティブ化）
-        driver.switch_to.default_content()
-        WebDriverWait(driver, 10).until(
-            EC.frame_to_be_available_and_switch_to_it("frameTop")
-        )
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.LINK_TEXT, "届出処理"))
-        ).click()
+    # # 申請内容確認
+    # try:
+    #     # frameTopで「届出処理」を再クリック（アクティブ化）
+    #     driver.switch_to.default_content()
+    #     WebDriverWait(driver, 10).until(
+    #         EC.frame_to_be_available_and_switch_to_it("frameTop")
+    #     )
+    #     WebDriverWait(driver, 10).until(
+    #         EC.element_to_be_clickable((By.LINK_TEXT, "届出処理"))
+    #     ).click()
 
-        # frameBtmで「届出データ表示」をクリック
-        driver.switch_to.default_content()
-        WebDriverWait(driver, 10).until(
-            EC.frame_to_be_available_and_switch_to_it("frameBtm")
-        )
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//span[.//img[contains(@alt, '届出データ表示')]]")
-            )
-        ).click()
+    #     # frameBtmで「届出データ表示」をクリック
+    #     driver.switch_to.default_content()
+    #     WebDriverWait(driver, 10).until(
+    #         EC.frame_to_be_available_and_switch_to_it("frameBtm")
+    #     )
+    #     WebDriverWait(driver, 10).until(
+    #         EC.element_to_be_clickable(
+    #             (By.XPATH, "//span[.//img[contains(@alt, '届出データ表示')]]")
+    #         )
+    #     ).click()
 
-        time.sleep(2)  # 表示待ち（必要なら明示）
+    #     time.sleep(2)  # 表示待ち（必要なら明示）
 
-        # 表示ページのframeBtmに再度切り替えて最下部へスクロール
-        driver.switch_to.default_content()
-        WebDriverWait(driver, 10).until(
-            EC.frame_to_be_available_and_switch_to_it("frameBtm")
-        )
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    #     # 表示ページのframeBtmに再度切り替えて最下部へスクロール
+    #     driver.switch_to.default_content()
+    #     WebDriverWait(driver, 10).until(
+    #         EC.frame_to_be_available_and_switch_to_it("frameBtm")
+    #     )
+    #     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-        print("[INFO] 届出データ表示ページを表示し、スクロール完了。")
+    #     print("[INFO] 届出データ表示ページを表示し、スクロール完了。")
 
-    except Exception as e:
-        print(f"[WARNING] 届出データ表示の確認中にエラーが発生しました: {e}")
-
+    # except Exception as e:
+    #     print(f"[WARNING] 届出データ表示の確認中にエラーが発生しました: {e}")
+    
 except Exception as e:
     print(f"[ERROR] 処理中にエラーが発生しました: {e}")
 
@@ -261,3 +265,80 @@ finally:
     # driver.quit()
     # print("[INFO] ブラウザを閉じて終了しました。")
     print("[INFO] 終了")
+
+
+# ====== 申請後：残業時間の月末予測とアラート ======
+try:
+    print("[INFO] 残業時間予測のため週報へ遷移します。")
+
+    # メニュー遷移
+    driver.switch_to.default_content()
+    WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it("frameTop"))
+    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.LINK_TEXT, "就業情報"))).click()
+
+    driver.switch_to.default_content()
+    WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it("frameBtm"))
+    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), '就業日次処理')]"))).click()
+    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//span[.//img[contains(@alt, '就業週報')]]"))).click()
+
+    driver.switch_to.default_content()
+    WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it("frameBtm"))
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(1)
+
+    # ====== データ取得 ======
+    data_map = {"所定日数": None, "出勤日数": None, "年休日数": None}
+    cells = driver.find_elements(By.XPATH, "//tr[contains(@class, 'ap_tr_base')]/td")
+    for i in range(len(cells) - 1):
+        label = cells[i].text.strip()
+        if label in data_map:
+            data_map[label] = cells[i + 1].text.strip()
+
+    overtime_total_elem = driver.find_element(By.XPATH, "//td[@title='合計    早出残業']")
+    early_overtime_total = overtime_total_elem.text.strip()
+
+    def time_str_to_minutes(timestr):
+        try:
+            hours, minutes = map(int, timestr.split(":"))
+            return hours * 60 + minutes
+        except:
+            return 0
+
+    def minutes_to_time_str(minutes):
+        h = minutes // 60
+        m = minutes % 60
+        return f"{h}:{m:02d}"
+
+    # ====== 計算処理 ======
+    early_total_min = time_str_to_minutes(early_overtime_total)
+    work_days = float(data_map["出勤日数"])
+    planned_days = float(data_map["所定日数"])
+    holiday_days = float(data_map["年休日数"])
+    remaining_days = (planned_days - work_days)+ holiday_days
+
+    avg_overtime_min = early_total_min / work_days if work_days else 0
+    projected_total_min = avg_overtime_min * planned_days
+
+    print("======== [INFO] 残業予測モニタリング ========")
+    print(f"・平均残業時間/日: {minutes_to_time_str(int(avg_overtime_min))}")
+    print(f"・残業時間予測（月末）: {minutes_to_time_str(int(projected_total_min))}")
+    print(f"・月の残り出勤数: {remaining_days:.1f} 日")
+    print("===========================================")
+
+    print(f"\n【📈 残業予測】")
+    print(f"- 平均残業時間/日: {minutes_to_time_str(int(avg_overtime_min))}")
+    print(f"- 残業時間予測（月末）: {minutes_to_time_str(int(projected_total_min))}")
+    print(f"- 月の残り出勤数: {remaining_days:.1f} 日")
+
+    # ====== 警告ポップアップ判定 ======
+    today = datetime.datetime.today()
+    if today.day >= ZANGYOU_ALERT_DAY and projected_total_min >= ZANGYOU_LIMIT_HOUR * 60:
+        messagebox.showwarning(
+            "⚠️ 残業時間注意",
+            f"このままでは月末の残業時間が{ZANGYOU_LIMIT_HOUR}時間を超えます！\n予測: {minutes_to_time_str(int(projected_total_min))}"
+        )
+    else:
+        print("[INFO] 残業アラートの条件には該当しません。")
+
+except Exception as e:
+    print(f"[ERROR] 予測表示中のエラー: {e}")
