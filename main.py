@@ -2,24 +2,23 @@ from tkinter import messagebox
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import NoAlertPresentException, TimeoutException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.edge.options import Options as EdgeOptions
+from selenium.webdriver.edge.service import Service as EdgeService
 import datetime
 import time
 import sys
 import tkinter as tk
-from tkinter import simpledialog
 from tkinter import font
-import os  # 追加
+import os
+import glob
+from pathlib import Path
 
-
-# ====== 残業アラート用定数 （時間・アラート開始日） ======
-ZANGYOU_LIMIT_HOUR = 1  # 40H
-ZANGYOU_ALERT_DAY = 2  # 20日
+# ====== 残業アラート用定数 ======
+ZANGYOU_LIMIT_HOUR = 1
+ZANGYOU_ALERT_DAY = 2
 
 
 def custom_input_dialog(title, prompt, show=None, maxlen=None):
@@ -29,14 +28,13 @@ def custom_input_dialog(title, prompt, show=None, maxlen=None):
     win.resizable(False, False)
     win.grab_set()
 
-    # フォント設定（大きめ）
     label_font = font.Font(size=14)
     entry_font = font.Font(size=14)
 
     tk.Label(win, text=prompt, font=label_font).pack(pady=10)
     entry = tk.Entry(win, font=entry_font, width=30, show=show)
     entry.pack()
-    entry.focus_set()  # ★ ここでカーソルをセット
+    entry.focus_set()
 
     result = {"value": None}
 
@@ -69,12 +67,10 @@ def custom_input_dialog(title, prompt, show=None, maxlen=None):
     return result["value"]
 
 
-13
-# ====== ユーザー入力（パスワード・理由） ======
+# ====== ユーザー入力 ======
 root = tk.Tk()
 root.withdraw()
 
-# --- パスワード入力（常に必要） ---
 PASSWORD = custom_input_dialog(
     "パスワード入力", "ログイン用パスワードを入力してください：", show="*"
 )
@@ -82,13 +78,11 @@ if not PASSWORD:
     print("[ERROR] パスワードが入力されませんでした。")
     sys.exit(1)
 
-# --- 残業申請を実行するか確認 ---
 proceed = messagebox.askyesno("確認", "残業申請を実行しますか？")
 if not proceed:
     print("[INFO] ユーザーが申請をキャンセルしました。")
 # sys.exit(0)
 if proceed:
-    # --- 残業理由の入力（申請する場合のみ） ---
     MAX_REASON_LEN = 20
     while True:
         ZANGYO_REASON = custom_input_dialog(
@@ -109,35 +103,56 @@ if proceed:
         else:
             break
 
-
 # ====== 定時設定 ======
 定時 = datetime.datetime.strptime("17:00", "%H:%M")
+
 # ====== 設定 ======
-# SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # スクリプトの絶対パスを取得
 SCRIPT_DIR = os.getcwd()
-EXCEL_PATH = os.path.join(
-    SCRIPT_DIR, "IDPASS.xlsx"
-)  # 同じフォルダ内のExcelファイルを指定
+EXCEL_PATH = os.path.join(SCRIPT_DIR, "IDPASS.xlsx")
 TARGET_SCRIPT = "TimeProGX"
 LOGIN_URL = "http://128.198.11.125/xgweb/login.asp"
 
-# ====== ログインID取得（Excelから） ======
+# ====== ログインID取得 ======
 try:
-    df = pd.read_excel(EXCEL_PATH, dtype={"ID": str})  # ← dtype指定で文字列として読む
+    df = pd.read_excel(EXCEL_PATH, dtype={"ID": str})
     row = df[df["スクリプト"] == TARGET_SCRIPT].iloc[0]
-    LOGIN_ID = row["ID"].strip()  # strip()で空白除去も安全に
+    LOGIN_ID = row["ID"].strip()
 except Exception as e:
     print(f"[ERROR] Excel読み込み失敗: {e}")
     sys.exit(1)
 
-# ====== Chrome起動オプション ======
-options = Options()
-# options.add_argument("--headless")
+
+# ====== WebDriver 位置解決（PyInstaller対応） ======
+def _resolve_driver_path():
+    driver_filename = "msedgedriver.exe"  # 同階層配置前提（Windows）
+    if getattr(sys, "frozen", False):  # PyInstaller 実行ファイル
+        base_dir = os.path.dirname(sys.executable)
+    elif hasattr(sys, "_MEIPASS"):  # 一部のビルド形態で利用
+        base_dir = sys._MEIPASS
+    else:  # スクリプト実行
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, driver_filename)
+
+
+driver_path = _resolve_driver_path()
+if not os.path.exists(driver_path):
+    messagebox.showerror(
+        "ドライバー未検出",
+        f"WebDriver が見つかりません:\n{driver_path}\n"
+        "EXE と同じフォルダに msedgedriver.exe を配置してください。",
+    )
+    sys.exit(1)
+
+# ====== Edge 起動 ======
+options = EdgeOptions()
+# options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-driver = webdriver.Chrome(options=options)
+service = EdgeService(executable_path=driver_path)
+driver = webdriver.Edge(service=service, options=options)
 driver.implicitly_wait(3)
+
 
 try:
     print("[INFO] ログインページにアクセス中...")
@@ -160,7 +175,7 @@ try:
         try:
             retire_button = WebDriverWait(driver, 3).until(
                 EC.element_to_be_clickable(
-                    (By.LINK_TEXT, "出　勤")
+                    (By.LINK_TEXT, "退　勤")
                 )  # TODO ログイン後の打刻は出勤OR退勤に変更でクリックされるボタンを変更
             )
             retire_button.click()
@@ -202,7 +217,7 @@ try:
 
     print(f"[INFO] 打刻時間: {punch_time}")
 
-    # ====== ポップアップ閉じる（戻る） ======
+    # ====== ポップアップ閉じる ======
     try:
         driver.find_element(By.LINK_TEXT, "戻る").click()
         print("[INFO] ポップを閉じました。")
@@ -219,17 +234,11 @@ try:
 
     # ====== 残業時間判定 ======
     punch_dt = datetime.datetime.strptime(punch_time, "%H:%M")
-    delta_min = (punch_dt - 定時).total_seconds() / 60
-    # if delta_min < 10:
-    #     print("[INFO] 残業時間が10分未満のため申請をスキップします。")
-    #     driver.quit()
-    #     sys.exit(0)
-
     start_time = 定時.strftime("%H:%M")
     end_time = punch_time
     print(f"[INFO] 残業申請時間: {start_time} ～ {end_time}")
 
-    # ====== メニュー遷移（frameTop → frameBtm） ======
+    # ====== メニュー遷移 ======
     WebDriverWait(driver, 5).until(
         EC.frame_to_be_available_and_switch_to_it("frameTop")
     )
@@ -252,7 +261,7 @@ try:
         )
     ).click()
 
-    # ====== 申請画面で入力 ======
+    # ====== 申請フォーム入力 ======
     driver.switch_to.default_content()
     WebDriverWait(driver, 5).until(
         EC.frame_to_be_available_and_switch_to_it("frameBtm")
@@ -271,13 +280,12 @@ try:
 
     print("[SUCCESS] 残業申請フォーム入力完了")
 
-    # --- 登録ボタンを押す ---
+    # --- 登録ボタン（本番は有効化） ---
     apply_button = driver.find_element(
         By.XPATH, "//input[@name='ActBtn' and @value='登録']"
     )
-    # apply_button.click()  # TODO 登録ボタンの有効にする際はコメント化解除
+    apply_button.click()  # TODO 登録ボタンの有効にする際はコメント化解除
 
-    # --- 登録ポップアップに自動応答 ---
     try:
         WebDriverWait(driver, 10).until(EC.alert_is_present())
         alert = driver.switch_to.alert
@@ -287,42 +295,6 @@ try:
     except TimeoutException:
         print("⚠️ アラートが表示されませんでした。")
 
-    # # 申請内容確認
-    # try:
-    #     # frameTopで「届出処理」を再クリック（アクティブ化）
-    #     driver.switch_to.default_content()
-    #     WebDriverWait(driver, 10).until(
-    #         EC.frame_to_be_available_and_switch_to_it("frameTop")
-    #     )
-    #     WebDriverWait(driver, 10).until(
-    #         EC.element_to_be_clickable((By.LINK_TEXT, "届出処理"))
-    #     ).click()
-
-    #     # frameBtmで「届出データ表示」をクリック
-    #     driver.switch_to.default_content()
-    #     WebDriverWait(driver, 10).until(
-    #         EC.frame_to_be_available_and_switch_to_it("frameBtm")
-    #     )
-    #     WebDriverWait(driver, 10).until(
-    #         EC.element_to_be_clickable(
-    #             (By.XPATH, "//span[.//img[contains(@alt, '届出データ表示')]]")
-    #         )
-    #     ).click()
-
-    #     time.sleep(2)  # 表示待ち（必要なら明示）
-
-    #     # 表示ページのframeBtmに再度切り替えて最下部へスクロール
-    #     driver.switch_to.default_content()
-    #     WebDriverWait(driver, 10).until(
-    #         EC.frame_to_be_available_and_switch_to_it("frameBtm")
-    #     )
-    #     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-
-    #     print("[INFO] 届出データ表示ページを表示し、スクロール完了。")
-
-    # except Exception as e:
-    #     print(f"[WARNING] 届出データ表示の確認中にエラーが発生しました: {e}")
-
 except Exception as e:
     print(f"[ERROR] 処理中にエラーが発生しました: {e}")
 
@@ -331,12 +303,10 @@ finally:
     # print("[INFO] ブラウザを閉じて終了しました。")
     print("[INFO] 終了")
 
-
-# ====== 申請後：残業時間の月末予測とアラート ======
+# ====== 申請後: 残業時間の月末予測 ======
 try:
     print("[INFO] 残業時間予測のため週報へ遷移します。")
 
-    # メニュー遷移
     driver.switch_to.default_content()
     WebDriverWait(driver, 10).until(
         EC.frame_to_be_available_and_switch_to_it("frameTop")
@@ -367,7 +337,6 @@ try:
     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
     time.sleep(1)
 
-    # ====== データ取得 ======
     data_map = {"所定日数": None, "出勤日数": None, "年休日数": None}
     cells = driver.find_elements(By.XPATH, "//tr[contains(@class, 'ap_tr_base')]/td")
     for i in range(len(cells) - 1):
@@ -392,7 +361,6 @@ try:
         m = minutes % 60
         return f"{h}:{m:02d}"
 
-    # ====== 計算処理 ======
     early_total_min = time_str_to_minutes(early_overtime_total)
     work_days = float(data_map["出勤日数"])
     planned_days = float(data_map["所定日数"])
@@ -408,16 +376,14 @@ try:
     print(f"・月の残り出勤数: {remaining_days:.1f} 日")
     print("===========================================")
 
-    print(f"\n【📈 残業予測】")
+    print("\n【📈 残業予測】")
     print(f"- 平均残業時間/日: {minutes_to_time_str(int(avg_overtime_min))}")
     print(f"- 残業時間予測（月末）: {minutes_to_time_str(int(projected_total_min))}")
     print(f"- 月の残り出勤数: {remaining_days:.1f} 日")
 
-    # ====== 警告ポップアップ判定 ======
     today = datetime.datetime.today()
-    if (
-        today.day >= ZANGYOU_ALERT_DAY
-        and projected_total_min >= ZANGYOU_LIMIT_HOUR * 60
+    if (today.day >= ZANGYOU_ALERT_DAY) and (
+        projected_total_min >= ZANGYOU_LIMIT_HOUR * 60
     ):
         messagebox.showwarning(
             "⚠️ 残業時間注意",
