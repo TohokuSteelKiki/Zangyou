@@ -107,11 +107,13 @@ main.py
 
 ## 📦 配布について
 
-main.py を pyInstaller で exe 化する。
+main.py を pyInstaller で exe 化する。(アイコンも含む)
 コマンド （ターミナルで実行）
-python -m PyInstaller --onefile main.py
+python -m PyInstaller --onefile --icon=icon.ico main.py
 
 実行後に dist フォルダが生成される。
+
+python -m PyInstaller  main.spec
 
 ID.xlsx と msedgedriver.exe を同梱する。
 ※msedgedriver.exeはEdgeのWEBドライバーで下記からダウンロード
