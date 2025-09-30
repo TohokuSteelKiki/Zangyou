@@ -42,7 +42,9 @@ LOGIN_URL = "http://128.198.11.125/xgweb/login.asp"
 EXCEL_FILENAME = "ID.xlsx"
 EXCEL_COL_SCRIPT = "スクリプト"
 EXCEL_COL_ID = "ID"
-IS_TEST = 1  # 0=リリースモード １＝テストモード
+
+# テストモード: True=登録クリックしない / False=登録クリックする（本番）
+IS_TEST: bool = True
 
 # 定時
 FIXED_OFF_TIME = dt.datetime.strptime("17:00", "%H:%M")  # 退社基準
@@ -54,9 +56,8 @@ ZANGYOU_ALERT_DAY = 20  # 月内のこの日以降に判定
 # 入力仕様
 MAX_REASON_LEN = 20
 
-# 実行オプション
-KEEP_BROWSER = False  # デバッグ用: Trueでブラウザを閉じない
-
+# ブラウザ自動終了（秒）
+BROWSER_AUTO_CLOSE_AFTER_SEC = 300  # 5分
 
 # =============================================================================
 # 汎用ユーティリティ
@@ -185,7 +186,7 @@ def load_login_id(excel_path: Path, target_script: str) -> str:
     try:
         df = pd.read_excel(excel_path, dtype={EXCEL_COL_ID: str})
         row = df[df[EXCEL_COL_SCRIPT] == target_script].iloc[0]
-        login_id = row[EXCEL_COL_ID].strip()
+        login_id = str(row[EXCEL_COL_ID]).strip()
         if not login_id:
             raise ValueError("IDが空")
         return login_id
@@ -314,8 +315,8 @@ def fill_overtime_form(
     apply_button = drv.find_element(
         By.XPATH, "//input[@name='ActBtn' and @value='登録']"
     )
-    # リリースモードでは登録ボタンをクリック テストモードでは登録しない。
-    if IS_TEST == 0:
+    # 本番のみ「登録」をクリック
+    if not IS_TEST:
         apply_button.click()
 
     try:
@@ -392,9 +393,8 @@ def compute_overtime_projection(metrics: Dict[str, str]) -> Dict[str, str]:
 
 def show_overtime_alert_if_needed(projected_total_min: int) -> None:
     today = dt.datetime.today()
-    if (
-        today.day >= ZANGYOU_ALERT_DAY
-        and projected_total_min >= ZANGYOU_LIMIT_HOUR * 60
+    if (today.day >= ZANGYOU_ALERT_DAY) and (
+        projected_total_min >= ZANGYOU_LIMIT_HOUR * 60
     ):
         messagebox.showwarning(
             "⚠️ 残業時間注意",
@@ -410,6 +410,7 @@ def show_overtime_alert_if_needed(projected_total_min: int) -> None:
 
 
 def main() -> None:
+    drv: Optional[webdriver.Edge] = None
     try:
         password, reason = ask_password_and_reason()
 
@@ -421,127 +422,101 @@ def main() -> None:
         driver_path = resolve_driver_path()
         drv = create_driver(driver_path)
 
-        try:
-            # ログイン
-            log("ログインページにアクセス中...")
-            drv.get(LOGIN_URL)
-            drv.find_element(By.NAME, "LoginID").send_keys(login_id)
-            drv.find_element(By.NAME, "PassWord").send_keys(password)
-            drv.find_element(By.NAME, "btnLogin").click()
+        # ===== ログイン =====
+        log("ログインページにアクセス中...")
+        drv.get(LOGIN_URL)
+        drv.find_element(By.NAME, "LoginID").send_keys(login_id)
+        drv.find_element(By.NAME, "PassWord").send_keys(password)
+        drv.find_element(By.NAME, "btnLogin").click()
 
-            # frame待機
-            wait(drv, 5).until(
-                EC.presence_of_all_elements_located((By.TAG_NAME, "frame"))
+        # frame待機
+        wait(drv, 10).until(EC.presence_of_all_elements_located((By.TAG_NAME, "frame")))
+
+        # ===== 出勤/退勤クリック =====
+        # 本番: 退勤 / テスト: 出勤
+        if not IS_TEST:
+            clicked = find_and_click_in_frames(
+                drv, By.LINK_TEXT, "退　勤", click=True, frame_wait=3
             )
+        else:
+            clicked = find_and_click_in_frames(
+                drv, By.LINK_TEXT, "出　勤", click=True, frame_wait=3
+            )
+        if not clicked:
+            warn("出勤/退勤リンクが見つかりませんでした。")
+            # 申請・予測は継続不能なので終了
+            return
 
-            # 退勤ボタン探索 リリースモード：退勤をクリック テストモード：出勤をクリック
-            if IS_TEST == 0:
-                clicked = find_and_click_in_frames(
-                    drv, By.LINK_TEXT, "退　勤", click=True, frame_wait=3
-                )
-            else:
-                clicked = find_and_click_in_frames(
-                    drv, By.LINK_TEXT, "出　勤", click=True, frame_wait=3
-                )
-            if not clicked:
-                warn("退勤リンクが見つかりませんでした。")
-                return
+        # ===== 打刻時刻取得（ポップアップ）=====
+        main_window = drv.current_window_handle
+        switch_to_new_window(drv, timeout=5)
 
-            # ポップアップへ
-            main_window = drv.current_window_handle
-            switch_to_new_window(drv, timeout=5)
+        punch_time = get_punch_time_from_popup(drv)
+        if not punch_time:
+            warn("打刻時間が取得できませんでした。")
+            return
+        log(f"打刻時間: {punch_time}")
 
-            # 打刻時間取得
-            punch_time = get_punch_time_from_popup(drv)
-            if not punch_time:
-                warn("打刻時間が取得できませんでした。")
-                return
-            log(f"打刻時間: {punch_time}")
-
-            # ポップアップ閉じ
-            try:
-                drv.find_element(By.LINK_TEXT, "戻る").click()
-                log("ポップを閉じました。")
-                wait(drv, 3).until(lambda d: len(d.window_handles) == 1)
-            except Exception as e:
-                warn(f"戻るボタン操作失敗: {e}")
-
-            drv.switch_to.window(main_window)
-            drv.switch_to.default_content()
-
-            # 残業申請実行
-            if reason is None:
-                log("残業申請しないので終了します。")
-            else:
-                start_hm = FIXED_OFF_TIME.strftime("%H:%M")
-                end_hm = punch_time
-                log(f"残業申請時間: {start_hm} ～ {end_hm}")
-
-                navigate_menu_to_overtime_form(drv)
-                fill_overtime_form(drv, start_hm, end_hm, reason)
-
-        except Exception as e:
-            err(f"処理中にエラーが発生しました: {e}")
-        finally:
-            if not KEEP_BROWSER:
-                try:
-                    drv.quit()
-                    log("ブラウザを閉じて終了しました。")
-                except Exception:
-                    pass
-            else:
-                log("デバッグのためブラウザは開いたままにしています。")
-
-        # ====== 申請後: 残業時間の月末予測 ======
-        # 予測は画面遷移に依存するためブラウザが必要。保持しない構成では再度起動して参照する。
-        # ここでは簡潔に再ログインして取得する。
+        # ポップアップ閉じ
         try:
-            drv2 = create_driver(driver_path)
-            try:
-                log("残業時間予測のため週報へ遷移します。")
+            drv.find_element(By.LINK_TEXT, "戻る").click()
+            log("ポップアップを閉じました。")
+            wait(drv, 3).until(lambda d: len(d.window_handles) == 1)
+        except Exception as e:
+            warn(f"戻るボタン操作失敗: {e}")
 
-                # ログイン
-                drv2.get(LOGIN_URL)
-                drv2.find_element(By.NAME, "LoginID").send_keys(login_id)
-                drv2.find_element(By.NAME, "PassWord").send_keys(password)
-                drv2.find_element(By.NAME, "btnLogin").click()
-                wait(drv2, 10).until(
-                    EC.presence_of_all_elements_located((By.TAG_NAME, "frame"))
-                )
+        drv.switch_to.window(main_window)
+        drv.switch_to.default_content()
 
-                navigate_to_weekly_report(drv2)
-                metrics = extract_weekly_metrics(drv2)
-                proj = compute_overtime_projection(metrics)
+        # ===== 残業申請（理由ありのとき）=====
+        if reason is None:
+            log("残業申請はスキップします。")
+        else:
+            start_hm = FIXED_OFF_TIME.strftime("%H:%M")
+            end_hm = punch_time
+            log(f"残業申請時間: {start_hm} ～ {end_hm}")
 
-                print("======== [INFO] 残業予測モニタリング ========")
-                print(f"・平均残業時間/日: {proj['平均残業時間_日']}")
-                print(f"・残業時間予測（月末）: {proj['残業予測_月末']}")
-                print(f"・月の残り出勤数: {proj['残り出勤数_日']} 日")
-                print("===========================================")
+            navigate_menu_to_overtime_form(drv)
+            fill_overtime_form(drv, start_hm, end_hm, reason)
 
-                print("\n【📈 残業予測】")
-                print(f"- 平均残業時間/日: {proj['平均残業時間_日']}")
-                print(f"- 残業時間予測（月末）: {proj['残業予測_月末']}")
-                print(f"- 月の残り出勤数: {proj['残り出勤数_日']} 日")
+        # ===== 申請直後にそのまま週報へ遷移して予測 =====
+        log("残業時間予測のため週報へ遷移します。")
+        navigate_to_weekly_report(drv)
+        metrics = extract_weekly_metrics(drv)
+        proj = compute_overtime_projection(metrics)
 
-                show_overtime_alert_if_needed(int(proj["予測分_分"]))
+        print("======== [INFO] 残業予測モニタリング ========")
+        print(f"・平均残業時間/日: {proj['平均残業時間_日']}")
+        print(f"・残業時間予測（月末）: {proj['残業予測_月末']}")
+        print(f"・月の残り出勤数: {proj['残り出勤数_日']} 日")
+        print("===========================================")
 
-            except Exception as e:
-                err(f"予測表示中のエラー: {e}")
-            finally:
-                try:
-                    drv2.quit()
-                except Exception:
-                    pass
+        print("\n【📈 残業予測】")
+        print(f"- 平均残業時間/日: {proj['平均残業時間_日']}")
+        print(f"- 残業時間予測（月末）: {proj['残業予測_月末']}")
+        print(f"- 月の残り出勤数: {proj['残り出勤数_日']} 日")
 
-        except WebDriverException as e:
-            err(f"予測取得のためのブラウザ起動に失敗: {e}")
+        show_overtime_alert_if_needed(int(proj["予測分_分"]))
+
+        # ===== 5分待ってから自動終了 =====
+        log(f"ブラウザを {BROWSER_AUTO_CLOSE_AFTER_SEC} 秒後に自動終了します。")
+        time.sleep(BROWSER_AUTO_CLOSE_AFTER_SEC)
 
     except SystemExit:
         raise
+    except WebDriverException as e:
+        err(f"Seleniumエラー: {e}")
+        sys.exit(1)
     except Exception as e:
         err(str(e))
         sys.exit(1)
+    finally:
+        try:
+            if drv is not None:
+                drv.quit()
+                log("ブラウザを閉じました。")
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
