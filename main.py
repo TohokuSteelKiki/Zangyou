@@ -2,11 +2,14 @@ from tkinter import messagebox
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
+
 from selenium.webdriver.edge.options import Options as EdgeOptions
 from selenium.webdriver.edge.service import Service as EdgeService
+
 import datetime
 import time
 import sys
@@ -122,6 +125,7 @@ except Exception as e:
     sys.exit(1)
 
 
+
 # ====== WebDriver 位置解決（PyInstaller対応） ======
 def _resolve_driver_path():
     driver_filename = "msedgedriver.exe"  # 同階層配置前提（Windows）
@@ -151,6 +155,7 @@ options.add_argument("--disable-dev-shm-usage")
 
 service = EdgeService(executable_path=driver_path)
 driver = webdriver.Edge(service=service, options=options)
+
 driver.implicitly_wait(3)
 
 
