@@ -12,14 +12,19 @@
 
 申請する場合
 残業申請へ移行 → 残業申請入力 → 登録
+→ 就業情報 → 就業日次処理 → 就業週報→ 月末残業時間の予測
+→所定日数/出勤日数/年休日数/早出残業合計からデータ取得
+→ 警告：当月20日以降 かつ 予測≥30h で警告ダイアログ
+→ 300秒待機 → ブラウザ自動終了
+
 
 ---
 
 ## 📁 ディレクトリ構成
 
 auto_zangyo/
-├── zangyo_script.py # メインスクリプト
-├── IDPASS.xlsx # 最低限IDを入力
+├── main.py # メインスクリプト
+├── ID.xlsx # 最低限IDを入力
 ├── README.md #
 
 ---
@@ -60,7 +65,7 @@ python.exe -m pip install --upgrade pip
 pip install pywinauto pandas openpyxl pyperclip tkinter
 ```
 
-### 2. IDPASS.xlsxの構成
+### 2. ID.xlsxの構成
 
 スクリプトID
 TimeProGX your_id
@@ -82,7 +87,7 @@ TimeProGX your_id
 | | webdriver-manager | `pip install webdriver-manager`Pythonでのブラウザ自動化として使用 |
 | | pywinauto | `pip install pywinauto`Pythonでのブラウザ自動化として使用 |
 | | pyperclip | `pip install pyperclip`Pythonでクリップボードとして使用 |
-| Webブラウザ | Google Chrome   | 最新版推奨。自動化対象として使用 |
+| Webブラウザ | Microsoft Edge   | 最新版推奨。自動化対象として使用 |
 | GUIモジュール | tkinter（標準） | Pythonに標準同梱（ない場合は `sudo apt install python3-tk` などで追加） |
 | Excelファイル | IDPASS.xlsx | スクリプトと同じディレクトリに配置（ID情報を記載） |
 
@@ -90,7 +95,7 @@ TimeProGX your_id
 
 ## 🚀 実行方法
 
-python main.py
+main.py
 起動後の操作
 ログインパスワード（非表示）の入力
 残業理由（例：「納期対応」など）の入力
@@ -100,7 +105,37 @@ python main.py
 残業時間乖離が何分からなのか不明のため現状維持でする→17：10以降は必ず入力する
 17:00～17:10の間に関しては申請の有無を申請者に委ねる。
 
-## その他
+## 📦 配布について
 
-png2icon.py：png画像をアイコンにする簡易プログラム
-icon.png､icon,ico：EXE化後のアイコンとしていかが？
+main.py を pyInstaller で exe 化する。
+コマンド （ターミナルで実行）
+python -m PyInstaller --onefile main.py
+
+実行後に dist フォルダが生成される。
+
+ID.xlsx と msedgedriver.exe を同梱する。
+※msedgedriver.exeはEdgeのWEBドライバーで下記からダウンロード
+https://developer.microsoft.com/ja-jp/microsoft-edge/tools/webdriver?form=MA13LH&ch=1#downloads
+
+
+
+配布時ディレクトリ構成
+dist/  (フォルダ名は変更可)
+├── ID.xlsx          # 名前変更不可
+├── main.exe         # 名前変更可
+├── msedgedriver.exe # 名前変更不可
+
+
+※ フォルダ内ファイルの移動は禁止。
+
+## 配布後
+1. ID.xlsxのID欄に社員コード（４桁）を記入
+2. main.exe をクリックしスクリプトを実行サせる
+
+
+## トラブルシュート
+Edgeをアップデートなどをしてから
+mai.exeを実行した際にログイン画面（ネット接続）で失敗した場合
+Edge本体とWEBドライバーのバージョンによる互換性がなくTimeProを開けないときがある。
+対処
+dist内のmsedgedriver.exe を対応するモノに更新する

@@ -44,7 +44,7 @@ EXCEL_COL_SCRIPT = "スクリプト"
 EXCEL_COL_ID = "ID"
 
 # テストモード: True=登録クリックしない / False=登録クリックする（本番）
-IS_TEST: bool = True
+IS_TEST: bool = False
 
 # 定時
 FIXED_OFF_TIME = dt.datetime.strptime("17:00", "%H:%M")  # 退社基準
