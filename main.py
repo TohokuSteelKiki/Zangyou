@@ -20,8 +20,8 @@ import glob
 from pathlib import Path
 
 # ====== 残業アラート用定数 ======
-ZANGYOU_LIMIT_HOUR = 1
-ZANGYOU_ALERT_DAY = 2
+ZANGYOU_LIMIT_HOUR = 30
+ZANGYOU_ALERT_DAY = 20
 
 
 def custom_input_dialog(title, prompt, show=None, maxlen=None):
@@ -111,7 +111,7 @@ if proceed:
 
 # ====== 設定 ======
 SCRIPT_DIR = os.getcwd()
-EXCEL_PATH = os.path.join(SCRIPT_DIR, "IDPASS.xlsx")
+EXCEL_PATH = os.path.join(SCRIPT_DIR, "ID.xlsx")
 TARGET_SCRIPT = "TimeProGX"
 LOGIN_URL = "http://128.198.11.125/xgweb/login.asp"
 
@@ -123,7 +123,6 @@ try:
 except Exception as e:
     print(f"[ERROR] Excel読み込み失敗: {e}")
     sys.exit(1)
-
 
 
 # ====== WebDriver 位置解決（PyInstaller対応） ======
