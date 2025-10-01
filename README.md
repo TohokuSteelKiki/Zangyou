@@ -24,6 +24,7 @@
 
 auto_zangyo/
 ├── main.py # メインスクリプト
+├── test.py # テストスクリプト
 ├── ID.xlsx # 最低限IDを入力
 ├── README.md #
 
@@ -126,6 +127,8 @@ dist/  (フォルダ名は変更可)
 ├── ID.xlsx          # 名前変更不可
 ├── main.exe         # 名前変更可
 ├── msedgedriver.exe # 名前変更不可
+├── test.exe 
+├── 残業申請_半自動化ツール取扱説明書.pdf
 
 
 ※ フォルダ内ファイルの移動は禁止。
