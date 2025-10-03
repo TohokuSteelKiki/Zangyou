@@ -31,7 +31,11 @@ from selenium.webdriver.edge.options import Options as EdgeOptions
 from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException, UnexpectedAlertPresentException
+from selenium.common.exceptions import (
+    TimeoutException,
+    WebDriverException,
+    UnexpectedAlertPresentException,
+)
 from selenium.webdriver.common.alert import Alert
 
 # =============================================================================
@@ -43,12 +47,19 @@ LOGIN_URL = "http://128.198.11.125/xgweb/login.asp"
 EXCEL_FILENAME = "ID.xlsx"
 EXCEL_COL_KEY = "項目"
 EXCEL_COL_VAL = "定数"
-EXCEL_LOGIN_KEYS = ["ID", "ログインID", "LoginID", "login_id", "TimeProGX（社員コード）"]
+EXCEL_LOGIN_KEYS = [
+    "ID",
+    "ログインID",
+    "LoginID",
+    "login_id",
+    "TimeProGX（社員コード）",
+]
 EXCEL_FIXED_OFF_KEYS = ["定時", "退社基準", "FIXED_OFF_TIME", "終業時刻"]
 
 
 # テストモード: True=登録クリックしない / False=登録クリックする（本番）
-IS_TEST: bool = True
+# IS_TEST: bool = True
+IS_TEST: bool = False
 
 # 定時
 FIXED_OFF_TIME = dt.datetime.strptime("17:00", "%H:%M")  # 退社基準
@@ -185,11 +196,14 @@ def ask_password_and_reason() -> Tuple[str, Optional[str]]:
 # データ取得
 # =============================================================================
 
+
 def _load_excel_kv(excel_path: Path) -> Dict[str, str]:
     try:
         df = pd.read_excel(excel_path, dtype=str)
         if EXCEL_COL_KEY not in df.columns or EXCEL_COL_VAL not in df.columns:
-            raise RuntimeError(f"Excelに必要な列がありません: {EXCEL_COL_KEY}, {EXCEL_COL_VAL}")
+            raise RuntimeError(
+                f"Excelに必要な列がありません: {EXCEL_COL_KEY}, {EXCEL_COL_VAL}"
+            )
         kv = {}
         for _, row in df.iterrows():
             k = str(row[EXCEL_COL_KEY]).strip()
@@ -200,7 +214,10 @@ def _load_excel_kv(excel_path: Path) -> Dict[str, str]:
     except Exception as e:
         raise RuntimeError(f"Excel読み込み失敗: {e}")
 
-def _get_from_kv(kv: Dict[str, str], candidates: list[str], *, required: bool=False) -> Optional[str]:
+
+def _get_from_kv(
+    kv: Dict[str, str], candidates: list[str], *, required: bool = False
+) -> Optional[str]:
     for c in candidates:
         if c in kv and str(kv[c]).strip():
             return str(kv[c]).strip()
@@ -208,14 +225,15 @@ def _get_from_kv(kv: Dict[str, str], candidates: list[str], *, required: bool=Fa
         raise RuntimeError(f"Excelに必要キーが見つかりません: {candidates}")
     return None
 
+
 def parse_hhmm(s: str) -> str:
     t = str(s).strip().replace("：", ":")
     if not t:
         raise ValueError("empty time")
     parts = t.split(":")
-    if len(parts) == 3:      # HH:MM:SS → HH:MM
+    if len(parts) == 3:  # HH:MM:SS → HH:MM
         h, m, _ = parts
-    elif len(parts) == 2:    # HH:MM
+    elif len(parts) == 2:  # HH:MM
         h, m = parts
     else:
         # "1700" 等にも一応対応
@@ -227,6 +245,7 @@ def parse_hhmm(s: str) -> str:
     h = f"{int(h):02d}"
     m = f"{int(m):02d}"
     return f"{h}:{m}"
+
 
 def resolve_driver_path() -> Path:
     # 同階層に msedgedriver.exe を配置する前提（PyInstaller対応）
@@ -243,6 +262,7 @@ def resolve_driver_path() -> Path:
 # =============================================================================
 # Selenium 操作
 # =============================================================================
+
 
 def handle_possible_alert(drv: webdriver.Edge, timeout: int = 0) -> bool:
     """アラートがあれば受理して True を返す"""
@@ -492,9 +512,13 @@ def main() -> None:
                 FIXED_OFF_TIME = dt.datetime.strptime(hhmm, "%H:%M")
                 log(f"Excel定義の定時を使用: {hhmm}")
             except Exception as e:
-                warn(f"定時の形式が不正です: {fixed_off_text} ({e})。既定17:00を使用します。")
+                warn(
+                    f"定時の形式が不正です: {fixed_off_text} ({e})。既定17:00を使用します。"
+                )
         else:
-            log(f"Excelに定時未設定。既定{FIXED_OFF_TIME.strftime('%H:%M')}を使用します。") 
+            log(
+                f"Excelに定時未設定。既定{FIXED_OFF_TIME.strftime('%H:%M')}を使用します。"
+            )
 
         driver_path = resolve_driver_path()
         drv = create_driver(driver_path)
