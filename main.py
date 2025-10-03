@@ -31,7 +31,8 @@ from selenium.webdriver.edge.options import Options as EdgeOptions
 from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.common.exceptions import TimeoutException, WebDriverException, UnexpectedAlertPresentException
+from selenium.webdriver.common.alert import Alert
 
 # =============================================================================
 # 定数
@@ -44,7 +45,7 @@ EXCEL_COL_SCRIPT = "スクリプト"
 EXCEL_COL_ID = "ID"
 
 # テストモード: True=登録クリックしない / False=登録クリックする（本番）
-IS_TEST: bool = False
+IS_TEST: bool = True
 
 # 定時
 FIXED_OFF_TIME = dt.datetime.strptime("17:00", "%H:%M")  # 退社基準
@@ -210,6 +211,21 @@ def resolve_driver_path() -> Path:
 # Selenium 操作
 # =============================================================================
 
+def handle_possible_alert(drv: webdriver.Edge, timeout: int = 0) -> bool:
+    """アラートがあれば受理して True を返す"""
+    try:
+        WebDriverWait(drv, timeout).until(EC.alert_is_present())
+        a = drv.switch_to.alert
+        text = a.text
+        a.accept()
+        log(f"アラート自動処理: {text}")
+        return True
+    except TimeoutException:
+        return False
+    except Exception as e:
+        warn(f"アラート処理失敗: {e}")
+        return False
+
 
 def create_driver(driver_path: Path) -> webdriver.Edge:
     if not driver_path.exists():
@@ -220,9 +236,11 @@ def create_driver(driver_path: Path) -> webdriver.Edge:
         sys.exit(1)
 
     options = EdgeOptions()
-    # options.add_argument("--headless=new")  # 必要なら有効化
+    # options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    # 未処理アラートは自動 accept
+    options.set_capability("unhandledPromptBehavior", "accept")
 
     service = EdgeService(executable_path=str(driver_path))
     drv = webdriver.Edge(service=service, options=options)
@@ -237,20 +255,32 @@ def wait(drv: webdriver.Edge, timeout: int = 10) -> WebDriverWait:
 def find_and_click_in_frames(
     drv: webdriver.Edge, by: By, value: str, click: bool = True, frame_wait: int = 3
 ) -> bool:
-    """複数frameを総当たりして最初に見つかった要素をクリックする"""
+    """複数frame/iframeを総当たりして最初に見つかった要素をクリックする"""
+    # 事前にアラート掃除
+    handle_possible_alert(drv, timeout=1)
+
     frames = drv.find_elements(By.TAG_NAME, "frame")
+    if not frames:
+        frames = drv.find_elements(By.TAG_NAME, "iframe")
+
     for i in range(len(frames)):
-        drv.switch_to.default_content()
-        drv.switch_to.frame(i)
         try:
+            drv.switch_to.default_content()
+            drv.switch_to.frame(i)
             elem = WebDriverWait(drv, frame_wait).until(
                 EC.element_to_be_clickable((by, value))
             )
             if click:
                 elem.click()
             return True
+        except UnexpectedAlertPresentException:
+            handle_possible_alert(drv, timeout=2)
+            continue
         except Exception:
             continue
+
+    # デフォルトに戻す
+    drv.switch_to.default_content()
     return False
 
 
@@ -315,7 +345,6 @@ def fill_overtime_form(
     apply_button = drv.find_element(
         By.XPATH, "//input[@name='ActBtn' and @value='登録']"
     )
-    # 本番のみ「登録」をクリック
     if not IS_TEST:
         apply_button.click()
 
@@ -429,11 +458,14 @@ def main() -> None:
         drv.find_element(By.NAME, "PassWord").send_keys(password)
         drv.find_element(By.NAME, "btnLogin").click()
 
+        # ログイン直後のアラートを先に処理
+        handle_possible_alert(drv, timeout=3)
+
         # frame待機
         wait(drv, 10).until(EC.presence_of_all_elements_located((By.TAG_NAME, "frame")))
 
         # ===== 出勤/退勤クリック =====
-        # 本番: 退勤 / テスト: 出勤
+        handle_possible_alert(drv, timeout=1)
         if not IS_TEST:
             clicked = find_and_click_in_frames(
                 drv, By.LINK_TEXT, "退　勤", click=True, frame_wait=3
@@ -444,7 +476,6 @@ def main() -> None:
             )
         if not clicked:
             warn("出勤/退勤リンクが見つかりませんでした。")
-            # 申請・予測は継続不能なので終了
             return
 
         # ===== 打刻時刻取得（ポップアップ）=====
