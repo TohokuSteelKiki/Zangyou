@@ -41,8 +41,11 @@ from selenium.webdriver.common.alert import Alert
 APP_NAME = "TimeProGX"
 LOGIN_URL = "http://128.198.11.125/xgweb/login.asp"
 EXCEL_FILENAME = "ID.xlsx"
-EXCEL_COL_SCRIPT = "スクリプト"
-EXCEL_COL_ID = "ID"
+EXCEL_COL_KEY = "項目"
+EXCEL_COL_VAL = "定数"
+EXCEL_LOGIN_KEYS = ["ID", "ログインID", "LoginID", "login_id", "TimeProGX（社員コード）"]
+EXCEL_FIXED_OFF_KEYS = ["定時", "退社基準", "FIXED_OFF_TIME", "終業時刻"]
+
 
 # テストモード: True=登録クリックしない / False=登録クリックする（本番）
 IS_TEST: bool = True
@@ -182,18 +185,48 @@ def ask_password_and_reason() -> Tuple[str, Optional[str]]:
 # データ取得
 # =============================================================================
 
-
-def load_login_id(excel_path: Path, target_script: str) -> str:
+def _load_excel_kv(excel_path: Path) -> Dict[str, str]:
     try:
-        df = pd.read_excel(excel_path, dtype={EXCEL_COL_ID: str})
-        row = df[df[EXCEL_COL_SCRIPT] == target_script].iloc[0]
-        login_id = str(row[EXCEL_COL_ID]).strip()
-        if not login_id:
-            raise ValueError("IDが空")
-        return login_id
+        df = pd.read_excel(excel_path, dtype=str)
+        if EXCEL_COL_KEY not in df.columns or EXCEL_COL_VAL not in df.columns:
+            raise RuntimeError(f"Excelに必要な列がありません: {EXCEL_COL_KEY}, {EXCEL_COL_VAL}")
+        kv = {}
+        for _, row in df.iterrows():
+            k = str(row[EXCEL_COL_KEY]).strip()
+            v = "" if pd.isna(row[EXCEL_COL_VAL]) else str(row[EXCEL_COL_VAL]).strip()
+            if k:
+                kv[k] = v
+        return kv
     except Exception as e:
         raise RuntimeError(f"Excel読み込み失敗: {e}")
 
+def _get_from_kv(kv: Dict[str, str], candidates: list[str], *, required: bool=False) -> Optional[str]:
+    for c in candidates:
+        if c in kv and str(kv[c]).strip():
+            return str(kv[c]).strip()
+    if required:
+        raise RuntimeError(f"Excelに必要キーが見つかりません: {candidates}")
+    return None
+
+def parse_hhmm(s: str) -> str:
+    t = str(s).strip().replace("：", ":")
+    if not t:
+        raise ValueError("empty time")
+    parts = t.split(":")
+    if len(parts) == 3:      # HH:MM:SS → HH:MM
+        h, m, _ = parts
+    elif len(parts) == 2:    # HH:MM
+        h, m = parts
+    else:
+        # "1700" 等にも一応対応
+        digits = "".join(ch for ch in t if ch.isdigit())
+        if len(digits) == 4:
+            h, m = digits[:2], digits[2:]
+        else:
+            raise ValueError(f"unsupported time format: {s}")
+    h = f"{int(h):02d}"
+    m = f"{int(m):02d}"
+    return f"{h}:{m}"
 
 def resolve_driver_path() -> Path:
     # 同階層に msedgedriver.exe を配置する前提（PyInstaller対応）
@@ -446,7 +479,22 @@ def main() -> None:
         # 環境パス
         script_dir = Path(os.getcwd())
         excel_path = script_dir / EXCEL_FILENAME
-        login_id = load_login_id(excel_path, APP_NAME)
+        kv = _load_excel_kv(excel_path)
+
+        login_id = _get_from_kv(kv, EXCEL_LOGIN_KEYS, required=True)
+
+        # 定時（Excel優先、未設定なら既定17:00）
+        fixed_off_text = _get_from_kv(kv, EXCEL_FIXED_OFF_KEYS, required=False)
+        if fixed_off_text:
+            try:
+                hhmm = parse_hhmm(fixed_off_text)
+                global FIXED_OFF_TIME
+                FIXED_OFF_TIME = dt.datetime.strptime(hhmm, "%H:%M")
+                log(f"Excel定義の定時を使用: {hhmm}")
+            except Exception as e:
+                warn(f"定時の形式が不正です: {fixed_off_text} ({e})。既定17:00を使用します。")
+        else:
+            log(f"Excelに定時未設定。既定{FIXED_OFF_TIME.strftime('%H:%M')}を使用します。") 
 
         driver_path = resolve_driver_path()
         drv = create_driver(driver_path)
