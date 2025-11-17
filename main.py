@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """
+Edge_Ver1.0.4
 TimeProGX 残業申請 + 残業予測
 - UI入力: Tkinter
 - 自動操作: Selenium Edge
@@ -55,10 +56,15 @@ EXCEL_LOGIN_KEYS = [
     "TimeProGX（社員コード）",
 ]
 EXCEL_FIXED_OFF_KEYS = ["定時", "退社基準", "FIXED_OFF_TIME", "終業時刻"]
-
+# 追加：残業申請のデフォルト（0=いいえ, 1=はい）
+EXCEL_OVERTIME_DEFAULT_KEYS = [
+    "残業申請デフォルト",
+    "残業申請既定",
+    "OVERTIME_DEFAULT",
+]
 
 # テストモード: True=登録クリックしない / False=登録クリックする（本番）
-# IS_TEST: bool = True
+#IS_TEST: bool = True
 IS_TEST: bool = False
 
 # 定時
@@ -159,7 +165,7 @@ def custom_input_dialog(
     return result["value"]
 
 
-def ask_password_and_reason() -> Tuple[str, Optional[str]]:
+def ask_password_and_reason(default_no: bool = False) -> Tuple[str, Optional[str]]:
     root = tk.Tk()
     root.withdraw()
 
@@ -170,7 +176,14 @@ def ask_password_and_reason() -> Tuple[str, Optional[str]]:
         err("パスワードが入力されませんでした。")
         sys.exit(1)
 
-    proceed = messagebox.askyesno("確認", "残業申請を実行しますか？")
+    # ここを修正：default ボタンを Excel 設定に応じて切り替える
+    default_btn = "no" if default_no else "yes"
+    proceed = messagebox.askyesno(
+        "確認",
+        "残業申請を実行しますか？",
+        default=default_btn,
+    )
+
     reason = None
     if proceed:
         while True:
@@ -494,14 +507,30 @@ def show_overtime_alert_if_needed(projected_total_min: int) -> None:
 def main() -> None:
     drv: Optional[webdriver.Edge] = None
     try:
-        password, reason = ask_password_and_reason()
-
         # 環境パス
         script_dir = Path(os.getcwd())
         excel_path = script_dir / EXCEL_FILENAME
         kv = _load_excel_kv(excel_path)
 
+        # ログインID
         login_id = _get_from_kv(kv, EXCEL_LOGIN_KEYS, required=True)
+
+        # 残業申請デフォルト（0 = いいえ, 1 = はい）
+        overtime_default_flag = _get_from_kv(
+            kv, EXCEL_OVERTIME_DEFAULT_KEYS, required=False
+        )
+        default_no = False  # 既定は「はい」
+
+        if overtime_default_flag is not None:
+            flag_str = str(overtime_default_flag).strip()
+            # 全角 ０／１ を半角に変換（念のため）
+            flag_str = flag_str.translate(str.maketrans("０１", "01"))
+
+            if flag_str == "0":
+                default_no = True   # Enter で「いいえ」
+            elif flag_str == "1":
+                default_no = False  # Enter で「はい」
+
 
         # 定時（Excel優先、未設定なら既定17:00）
         fixed_off_text = _get_from_kv(kv, EXCEL_FIXED_OFF_KEYS, required=False)
@@ -519,6 +548,9 @@ def main() -> None:
             log(
                 f"Excelに定時未設定。既定{FIXED_OFF_TIME.strftime('%H:%M')}を使用します。"
             )
+
+        # パスワード + 残業理由入力（デフォルトボタンは Excel 設定に従う）
+        password, reason = ask_password_and_reason(default_no=default_no)
 
         driver_path = resolve_driver_path()
         drv = create_driver(driver_path)
@@ -620,7 +652,6 @@ def main() -> None:
                 log("ブラウザを閉じました。")
         except Exception:
             pass
-
 
 if __name__ == "__main__":
     main()
